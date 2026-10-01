@@ -1,0 +1,136 @@
+{
+  "probed_at": "2026-09-22T16:22:13Z",
+  "endpoint": "passthrough/camara/v1/sim-swap/sim-swap/v0/check",
+  "results": [
+    {
+      "market": "CONTROL-sandbox",
+      "operator": "Nokia-sim",
+      "msisdn": "+99999991000",
+      "http": 200,
+      "ms": 3691,
+      "body": {
+        "swapped": true
+      }
+    },
+    {
+      "market": "Saudi",
+      "operator": "stc",
+      "msisdn": "+966501234567",
+      "http": 404,
+      "ms": 4469,
+      "body": "{\"status\":404,\"code\":\"IDENTIFIER_NOT_FOUND\",\"message\":\"Device identifier not found.\"}"
+    },
+    {
+      "market": "Saudi",
+      "operator": "stc",
+      "msisdn": "+966531234567",
+      "http": 404,
+      "ms": 1053,
+      "body": "{\"status\":404,\"code\":\"IDENTIFIER_NOT_FOUND\",\"message\":\"Device identifier not found.\"}"
+    },
+    {
+      "market": "Saudi",
+      "operator": "Mobily",
+      "msisdn": "+966541234567",
+      "http": 404,
+      "ms": 464,
+      "body": "{\"status\":404,\"code\":\"IDENTIFIER_NOT_FOUND\",\"message\":\"Device identifier not found.\"}"
+    },
+    {
+      "market": "Saudi",
+      "operator": "Mobily",
+      "msisdn": "+966561234567",
+      "http": 404,
+      "ms": 720,
+      "body": "{\"status\":404,\"code\":\"IDENTIFIER_NOT_FOUND\",\"message\":\"Device identifier not found.\"}"
+    },
+    {
+      "market": "Saudi",
+      "operator": "Zain",
+      "msisdn": "+966581234567",
+      "http": 404,
+      "ms": 451,
+      "body": "{\"status\":404,\"code\":\"IDENTIFIER_NOT_FOUND\",\"message\":\"Device identifier not found.\"}"
+    },
+    {
+      "market": "Egypt",
+      "operator": "Vodafone",
+      "msisdn": "+201012345678",
+      "http": 404,
+      "ms": 379,
+      "body": "{\"status\":404,\"code\":\"IDENTIFIER_NOT_FOUND\",\"message\":\"Device identifier not found.\"}"
+    },
+    {
+      "market": "Egypt",
+      "operator": "Etisalat",
+      "msisdn": "+201112345678",
+      "http": 404,
+      "ms": 335,
+      "body": "{\"status\":404,\"code\":\"IDENTIFIER_NOT_FOUND\",\"message\":\"Device identifier not found.\"}"
+    },
+    {
+      "market": "Egypt",
+      "operator": "Orange",
+      "msisdn": "+201212345678",
+      "http": 404,
+      "ms": 471,
+      "body": "{\"status\":404,\"code\":\"IDENTIFIER_NOT_FOUND\",\"message\":\"Device identifier not found.\"}"
+    },
+    {
+      "market": "Egypt",
+      "operator": "WE",
+      "msisdn": "+201512345678",
+      "http": 404,
+      "ms": 553,
+      "body": "{\"status\":404,\"code\":\"IDENTIFIER_NOT_FOUND\",\"message\":\"Device identifier not found.\"}"
+    },
+    {
+      "market": "Qatar",
+      "operator": "Ooredoo",
+      "msisdn": "+97433123456",
+      "http": 404,
+      "ms": 968,
+      "body": "{\"status\":404,\"code\":\"IDENTIFIER_NOT_FOUND\",\"message\":\"Device identifier not found.\"}"
+    },
+    {
+      "market": "Qatar",
+      "operator": "Ooredoo",
+      "msisdn": "+97455123456",
+      "http": 404,
+      "ms": 338,
+      "body": "{\"status\":404,\"code\":\"IDENTIFIER_NOT_FOUND\",\"message\":\"Device identifier not found.\"}"
+    },
+    {
+      "market": "UAE",
+      "operator": "e&",
+      "msisdn": "+971501234567",
+      "http": 404,
+      "ms": 338,
+      "body": "{\"status\":404,\"code\":\"IDENTIFIER_NOT_FOUND\",\"message\":\"Device identifier not found.\"}"
+    },
+    {
+      "market": "UAE",
+      "operator": "du",
+      "msisdn": "+971551234567",
+      "http": 404,
+      "ms": 350,
+      "body": "{\"status\":404,\"code\":\"IDENTIFIER_NOT_FOUND\",\"message\":\"Device identifier not found.\"}"
+    },
+    {
+      "market": "Lebanon",
+      "operator": "Alfa",
+      "msisdn": "+9613123456",
+      "http": 404,
+      "ms": 309,
+      "body": "{\"status\":404,\"code\":\"IDENTIFIER_NOT_FOUND\",\"message\":\"Device identifier not found.\"}"
+    },
+    {
+      "market": "Lebanon",
+      "operator": "touch",
+      "msisdn": "+96171123456",
+      "http": 404,
+      "ms": 457,
+      "body": "{\"status\":404,\"code\":\"IDENTIFIER_NOT_FOUND\",\"message\":\"Device identifier not found.\"}"
+    }
+  ]
+}

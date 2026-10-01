@@ -1,0 +1,23 @@
+{
+  "captured_at": "2026-09-22T19:34:55Z",
+  "ledger": {
+    "n": 3000,
+    "per_append_ms": {
+      "p50": 0.299,
+      "p95": 0.527,
+      "p99": 0.983
+    },
+    "throughput_per_s": 3073.7,
+    "chain_intact_after": true
+  },
+  "engine": {
+    "n": 1000,
+    "per_decision_ms": {
+      "p50": 1.526,
+      "p95": 2.75,
+      "p99": 3.739
+    },
+    "note": "stub signals \u2014 network excluded by design (dual-latency contract reports external separately)"
+  },
+  "note": "offline benches, single process, local disk"
+}
