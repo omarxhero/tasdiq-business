@@ -3,13 +3,13 @@
 > GENERATED FILE — do not edit by hand. Regenerate: `python scripts/build_state.py`
 > Verify everything: `python scripts/verify.py` (or `make verify`)
 
-**Generated:** 2026-10-02 15:23 UTC · **branch:** main · **commit:** 8ed6500 · **tree:** DIRTY
+**Generated:** 2026-10-02 15:26 UTC · **branch:** main · **commit:** 33e3396 · **tree:** clean
 
 ## Status: ALL GREEN
 
 | Check | Result |
 |---|---|
-| Test suite | 166 passed, 2 skipped, 1 warning in 15.04s |
+| Test suite | 166 passed, 2 skipped, 1 warning in 14.92s |
 | Z3 proof certificate | 16 invariants PROVED, 0 violated (ALL PROVE ALL INVARIANTS) |
 
 ## Wired (build-week commits d8526b5..8b750b9 + later)
