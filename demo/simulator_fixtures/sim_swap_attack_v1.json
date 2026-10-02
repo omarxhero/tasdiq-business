@@ -1,0 +1,22 @@
+{
+  "scenario_id": "sim_swap_attack_v1",
+  "title_en": "Live SIM swap + value spike",
+  "title_ar": "تبديل شريحة نشط + مبلغ ضخم",
+  "input": {
+    "msisdn": "+99999991000",
+    "amount": 50000.0,
+    "account_mean": 1000.0,
+    "beneficiary_first_seen_minutes": 9999,
+    "attempts_last_hour": 0
+  },
+  "expected": {
+    "decision": "DECLINE",
+    "band": "SIM_SWAP_INSTANT_PATTERN",
+    "tier": 2,
+    "cost_usd": 0.07,
+    "sms_grantable": false,
+    "sms_prohibited": true
+  },
+  "teaches_en": "Phase-1 early exit — the OTP never had a chance",
+  "teaches_ar": "خروج مبكر — الـOTP لم تتح له فرصة"
+}

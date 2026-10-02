@@ -112,6 +112,10 @@ class DecideRequest(BaseModel):
     call_in_progress: bool = False
     call_direction: Literal["none", "inbound", "outbound"] = "none"
     call_duration_minutes: float = Field(default=0.0, ge=0)
+    # call-forwarding state (CAMARA CFS: voice-call redirect; enum never bool)
+    call_forwarding_state: Literal["inactive", "unconditional", "conditional_busy",
+                                   "conditional_unreachable", "conditional_no_answer",
+                                   "unknown", "unavailable"] = "unknown"
     # Tier-0 event-forced screening: the bank KNOWS these events — an attacker
     # who resets credentials / registers a device / adds a payee gets the SIM
     # check regardless of how quiet the payment looks
@@ -163,6 +167,12 @@ def decide(req: DecideRequest):
     h = vault.put(req.msisdn); txn_index[req.txn_id] = h
     ledger.append_intercept(req.txn_id, req.msisdn, result, result["policy_version_hash"])
     _decision_cache[req.txn_id] = result
+    # webhook outbox — off the rail; an enqueue failure NEVER touches the decision
+    try:
+        from app import webhooks
+        webhooks.enqueue_verdict_event(result)
+    except Exception:
+        pass
     # inline tripwire on declines
     tw = {}
     if result["decision"] == "DECLINE":
@@ -206,6 +216,23 @@ def stepup_dispatch(req: StepupDispatch):
     _gateway_audit.append(rec)
     return {"dispatched": False, "audit": rec}
 
+# --- Policy Simulator: demo-tenant endpoints (isolated by design) -----------
+# Demo contract: GET endpoints only for the page (no state mutation, no keys);
+# the decide call itself goes through the SAME /v1/decide the bank uses, on
+# sandbox numbers, with the demo fixtures pinning expected outcomes in pytest.
+@app.get("/v1/simulator/fixtures", summary="Policy Simulator presets (demo tenant)",
+         description="JSON fixtures consumed by BOTH the simulator page and pytest — demo claims are contract-tested. Sandbox numbers only; bands and reasons, never raw thresholds.")
+def simulator_fixtures():
+    import json
+    from pathlib import Path
+    d = Path(__file__).resolve().parent.parent / "demo" / "simulator_fixtures"
+    out = []
+    for f in sorted(d.glob("*.json")):
+        out.append(json.loads(f.read_text(encoding="utf-8")))
+    return {"fixtures": out, "count": len(out),
+            "note": "demo tenant — sandbox numbers, demo policy; thresholds not exposed"}
+
+
 class ReplayLabRequest(BaseModel):
     bank: str = "A"
     title: str = "Replay Lab report"
@@ -219,6 +246,106 @@ def replaylab(req: ReplayLabRequest):
         raise HTTPException(422, "records must be non-empty")
     bundle = _load_bundle(req.bank)
     return replay(req.records, bundle, title=req.title)
+
+@app.post("/v1/outcomes", summary="Outcome Capture — dispositions become signed, chained labels",
+          description="Record the bank's disposition for a decided transaction (confirmed_scam / confirmed_legit / unresolved / customer_declined). Signed with the maker persona, appended to the agent ledger, joined by Replay Lab into measured incremental recall + false-escalation on REAL dispositions. notes are untrusted free text — presence recorded, content never stored. Callback priority by band rides along (the callback queue is a label factory).")
+def outcomes(req: __import__("app.outcomes", fromlist=["OutcomeRequest"]).OutcomeRequest):
+    from app.outcomes import record_outcome
+    def lookup(txn_id):
+        recs = ledger.replay(txn_id)
+        if not recs:
+            return None
+        import json as _json
+        r = recs[-1]
+        # intercept record carries decision fields at top level
+        return {"band": r.get("band"), "decision": r.get("decision"),
+                "policy_version_hash": r.get("policy_version_hash")}
+    return record_outcome(req, ledger, lookup)
+
+
+# --- Webhook delivery (admin-provisioned; evidence push, non-interfering) ----
+class WebhookRegisterRequest(BaseModel):
+    url: str
+    events: list[str] = ["verdict.created"]
+    secret: str
+    tenant: str = "bank-a"
+    format: Literal["tasdiq.v1", "cef"] = "tasdiq.v1"
+
+@app.post("/v1/webhooks", summary="Register a webhook endpoint (admin)",
+          description="Admin-provisioned, allowlisted SIEM/fraud-platform endpoint. HTTPS only; private/loopback/link-local/metadata destinations rejected. Per-endpoint HMAC secret with rotation overlap. Delivery is at-least-once with stable event_id, exponential backoff, dead-letter after 5 attempts, and replay administration.")
+def webhooks_register(req: WebhookRegisterRequest):
+    from app import webhooks as wh
+    key = wh.register(wh.WebhookEndpoint(url=req.url, events=req.events,
+                                         secret_current=req.secret,
+                                         tenant=req.tenant, format=req.format))
+    return {"key": key, "note": "delivery is asynchronous; decision latency is never affected"}
+
+@app.post("/v1/webhooks/dispatch", summary="Dispatcher tick (dev/admin)",
+          description="Deliver pending outbox events to registered endpoints. In production this is a background worker.")
+def webhooks_dispatch():
+    from app import webhooks as wh
+    import httpx
+    def send(url, headers, body):
+        try:
+            r = httpx.post(url, headers=headers, content=body, timeout=5.0)
+            return r.status_code
+        except Exception:
+            return 0
+    return wh.dispatch_pending(send)
+
+@app.get("/v1/webhooks/outbox", summary="Outbox status (admin)")
+def webhooks_outbox():
+    from app import webhooks as wh
+    from pathlib import Path as _P
+    import json as _json
+    if not wh.OUTBOX_PATH.exists():
+        return {"rows": [], "counts": {}}
+    rows = [_json.loads(l) for l in wh.OUTBOX_PATH.read_text(encoding="utf-8").splitlines() if l.strip()]
+    counts = {}
+    for r in rows:
+        counts[r["status"]] = counts.get(r["status"], 0) + 1
+    return {"rows": rows[-20:], "counts": counts}
+
+@app.post("/v1/webhooks/replay", summary="Replay delivered/dead events (admin)")
+def webhooks_replay(event_ids: list[str]):
+    from app import webhooks as wh
+    import httpx
+    def send(url, headers, body):
+        try:
+            r = httpx.post(url, headers=headers, content=body, timeout=5.0)
+            return r.status_code
+        except Exception:
+            return 0
+    return wh.replay_events(event_ids, send)
+
+
+class EventIngressRequest(BaseModel):
+    event_id: str
+    msisdn: str
+    type: Literal["sim_swap", "stable_snapshot", "subscription_ended"]
+    network_event_time: int | None = None
+    source: str = "subscription"
+    provider_signature: str = ""     # demo: shared-secret HMAC hex; empty = rejected
+
+@app.post("/v1/events", summary="CAMARA event ingress (provider-authenticated)",
+          description="Push events from operators/aggregators (SIM-swap subscriptions). Provider-auth required (demo: TASDIQ_EVENT_SECRET HMAC over event_id.msisdn.type); dedupe by event_id; ordered by network_event_time; every applied mutation is ledger-written. Feeds the posture cache: SWAPPED events retain for the longest policy window; stable snapshots create OBSERVED_STABLE; subscription-ended reverts to UNKNOWN (silence is never clean).")
+def events_ingress(req: EventIngressRequest):
+    import hashlib, hmac as _h, os as _os
+    from app.posture import POSTURE
+    secret = _os.getenv("TASDIQ_EVENT_SECRET", "demo-event-secret")
+    expected = _h.new(secret.encode(),
+                      f"{req.event_id}.{req.msisdn}.{req.type}".encode(),
+                      hashlib.sha256).hexdigest()
+    provider_ok = bool(req.provider_signature) and _h.compare_digest(expected, req.provider_signature)
+    if req.type == "subscription_ended":
+        POSTURE.mark_subscription_ended(req.msisdn)
+        rec = {"applied": True, "state": "UNKNOWN", "reason": "subscription_ended"}
+    else:
+        rec = POSTURE.apply_event(req.model_dump(), provider_ok=provider_ok)
+    if rec.get("applied"):
+        ledger.append_agent(req.event_id, "posture_mutation", rec)
+    return rec
+
 
 @app.get("/v1/stepup/audit", summary="Gateway audit trail (mock)")
 def stepup_audit():

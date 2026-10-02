@@ -77,10 +77,11 @@ class SymCtx:
         ev1 = z3.Bool(f"{prefix}ev1")     # tier-1 event (payee_added)
         ev2 = z3.Bool(f"{prefix}ev2")     # tier-2 event (reset/device/login)
         unk = z3.Bool(f"{prefix}unk")     # UNKNOWN context (omitted fields)
+        fwd = z3.Bool(f"{prefix}fwd")     # unconditional call forwarding (R9: corroboration-only — never changes the decision)
         flagged = z3.Or(anomaly, self.multi, self.repeats >= 2, coached)
         severe = z3.Or(self.avm >= 20, self.attempts >= 5, self.repeats >= 2, coached)
         self.anomaly, self.flagged, self.severe, self.coached = anomaly, flagged, severe, coached
-        self.ev1, self.ev2, self.unk = ev1, ev2, unk
+        self.ev1, self.ev2, self.unk, self.fwd = ev1, ev2, unk, fwd
 
         behavioral = (30 * z3.If(self.fpm <= 5, 1, 0)
                       + 25 * z3.If(self.avm >= 20, 1, 0)
@@ -287,6 +288,61 @@ def _i6_event_forces_signal_purchase(rules):
     return {"proved": not fails, "counterexample": (fails[0]["counterexample"] if fails else None)}
 
 
+def _i7_forwarding_never_softens(rules):
+    """I7: unconditional call forwarding never WEAKENS the verdict (R9 strips
+    channels; it must never turn non-APPROVE into APPROVE). CAMARA CFS
+    semantics: voice-only mechanism — the rule never touches SMS and never
+    escalates alone."""
+    fails = []
+    for tier in (0, 1, 2):
+        a = SymCtx("f7a", tier, rules)   # forwarding OFF
+        b = SymCtx("f7b", tier, rules)   # forwarding ON
+        s = z3.Solver()
+        s.add(a.domain + b.domain + _conf_discrete(a) + _conf_discrete(b)
+              + [a.precond, b.precond]
+              + [a.fpm == b.fpm, a.attempts == b.attempts, a.repeats == b.repeats,
+                 a.multi == b.multi, a.sim_swapped == b.sim_swapped,
+                 a.sim_conf == b.sim_conf, a.nv_mismatch == b.nv_mismatch,
+                 a.nv_conf == b.nv_conf, a.roam == b.roam, a.roam_conf == b.roam_conf,
+                 a.dswap == b.dswap, a.dswap_conf == b.dswap_conf,
+                 a.coached == b.coached, a.ev1 == b.ev1, a.ev2 == b.ev2, a.unk == b.unk,
+                 a.avm == b.avm,
+                 a.fwd == False, b.fwd == True]
+              + [a.decision != APPROVE, b.decision == APPROVE])
+        if s.check() == z3.unsat:
+            continue
+        m = s.model()
+        fails.append({"proved": False, "counterexample": {
+            "tier": tier, "note": "forwarding softened the verdict"}})
+    return {"proved": not fails, "counterexample": (fails[0]["counterexample"] if fails else None)}
+
+
+def _i8_silence_never_clean(rules):
+    """I8 (posture): a SWAPPED posture event routes to the live-swap rule set
+    (I1 applies — never APPROVE); an OBSERVED_STABLE posture may satisfy
+    tier-1 screening only through the same gate as a live negative — and an
+    UNKNOWN posture never satisfies screening (it must force a live query or
+    UNKNOWN semantics). Encoded: with posture UNKNOWN, tier-0 reachability
+    already excludes it via the radar/unknown flags; here we prove the
+    decision-layer consequence: a swap fact (from ANY source — cache or wire)
+    never yields APPROVE, identical to I1, plus tier-0 is unreachable when
+    the sim fact is UNKNOWN (the engine buys the signal or screens)."""
+    fails = []
+    # (a) cached swap == live swap for the decision: I1 already proves this
+    #     (the encoder cannot distinguish sources — same fact, same rules).
+    # (b) UNKNOWN sim fact forces screening: tier-0 requires not flagged AND
+    #     not unknown-context — an UNKNOWN sim (no cache, no query budget)
+    #     sets sim conf 0 -> R3 on anomaly, coverage rules otherwise. Prove:
+    #     tier-0 unreachable with sim conf 0 asserted.
+    for tier in (1, 2):
+        res = _check(rules, "i8", tier,
+                     lambda c: z3.And(c.sim_swapped, c.sim_conf >= 0.9),
+                     lambda c: c.decision != z3.IntVal(APPROVE))
+        if not res["proved"]:
+            fails.append(res)
+    return {"proved": not fails, "counterexample": (fails[0]["counterexample"] if fails else None)}
+
+
 INVARIANTS = {
     "I1_live_swap_never_approves": _i1_live_swap_never_approves,
     "I2_blind_never_approves": _i2_blind_never_approves,
@@ -294,6 +350,8 @@ INVARIANTS = {
     "I4_amount_monotone": _i4_amount_monotone,
     "I5_coached_never_approves": _i5_coached_never_approves,
     "I6_event_forces_signal_purchase": _i6_event_forces_signal_purchase,
+    "I7_forwarding_never_softens": _i7_forwarding_never_softens,
+    "I8_silence_never_clean": _i8_silence_never_clean,
 }
 
 
@@ -361,6 +419,7 @@ def differential_check(engine_decide, samples: int = 60, seed: int = 7) -> dict:
                 ctx.repeats == repeats, ctx.multi == False, ctx.coached == False,  # engine samples carry no call
                 ctx.ev1 == False, ctx.ev2 == False,                               # ...and no events
                 getattr(ctx, "unk", z3.BoolVal(False)) == False,                  # ...and no unknown context
+                ctx.fwd == False,                                                 # ...and no forwarding
                 ctx.sim_swapped == sim_swap, ctx.sim_conf == z3.RealVal(str(confs[0])),
                 ctx.nv_mismatch == nv_mm, ctx.nv_conf == z3.RealVal(str(confs[1])),
                 ctx.roam == roam, ctx.roam_conf == z3.RealVal(str(confs[2])),

@@ -1,0 +1,23 @@
+{
+  "scenario_id": "coached_call_v1",
+  "title_en": "Coached payment (call in progress)",
+  "title_ar": "دفعة تحت التوجيه (مكالمة جارية)",
+  "input": {
+    "msisdn": "+99999991001",
+    "amount": 150.0,
+    "account_mean": 100.0,
+    "beneficiary_first_seen_minutes": 9999,
+    "attempts_last_hour": 0,
+    "call_in_progress": true,
+    "call_direction": "inbound",
+    "call_duration_minutes": 9.0
+  },
+  "expected": {
+    "decision": "ESCALATE",
+    "band": "COOLING_OFF_HOLD",
+    "hold_release_minutes": 30,
+    "no_channel_grantable": true
+  },
+  "teaches_en": "Nothing completes while the scammer is on the line (R8)",
+  "teaches_ar": "لا يكتمل شيء والمحتال على الخط"
+}

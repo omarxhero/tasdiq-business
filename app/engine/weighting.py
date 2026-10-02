@@ -34,6 +34,12 @@ class Behavioral:
     call_in_progress: bool = False
     call_direction: str = "none"        # none | inbound | outbound
     call_duration_minutes: float = 0.0
+    # call-forwarding state (CAMARA CFS semantics: forwarding redirects INCOMING
+    # VOICE calls, not SMS). Enum — never a bool; conditional forwarding to
+    # voicemail is normal life, only UNCONDITIONAL is threat-relevant.
+    call_forwarding_state: str = "unknown"   # inactive|unconditional|conditional_busy|
+                                             # conditional_unreachable|conditional_no_answer|
+                                             # unknown|unavailable
     # UNKNOWN context flags: the bank did NOT send the field — unknown must
     # never read as clean (panel catch). Unknown forces screening (a signal
     # purchase), never silent approval without evidence.
@@ -127,7 +133,7 @@ def jitter_thresholds(policy: dict, txn_id: str) -> tuple[dict, dict]:
     return pol, used
 
 
-def evaluate(signals: list[Signal], b: Behavioral, policy: dict,
+def _evaluate_inner(signals: list[Signal], b: Behavioral, policy: dict,
              aged: Signal | None = None) -> dict:
     """Returns {decision, band, weighted_risk, total_risk, reasons, step_up}.
 
@@ -177,12 +183,15 @@ def evaluate(signals: list[Signal], b: Behavioral, policy: dict,
     # goes to a cooling-off hold with a callback to the bank-held number.
     # (Bank-app call-state input today; telecom Scam Signal = upgrade path.)
     if b.coached:
-        return _out("ESCALATE", "COOLING_OFF_HOLD", wr, total, reasons,
+        fwd = b.call_forwarding_state == "unconditional"
+        return _apply_forwarding(_out("ESCALATE", "COOLING_OFF_HOLD", wr, total, reasons,
                     [], ["SMS", "VOICE"],
                     hold={"release_after_minutes": policy.get("call_cooldown_minutes", 30),
                           "callback": "bank-held number",
                           "call_direction": b.call_direction,
-                          "call_duration_minutes": b.call_duration_minutes})
+                          "call_duration_minutes": b.call_duration_minutes,
+                          "callback_allowed": not fwd,
+                          **({"callback_block_reason": "unconditional_call_forwarding"} if fwd else {})}), b)
     # Rule 3 (checked before generic rule 2): primary signal lost + anomaly
     if sim is not None and sim.confidence == 0.0 and b.anomaly:
         return _out("ESCALATE", "PRIMARY_SIGNAL_LOSS", wr, total, reasons,
@@ -210,6 +219,38 @@ def evaluate(signals: list[Signal], b: Behavioral, policy: dict,
         return _out("ESCALATE", "WEIGHTED_RISK_BAND", wr, total, reasons,
                     ["SMS"], [])
     return _out("APPROVE", "CLEAN", wr, total, reasons, [], [])
+
+
+
+def evaluate(signals: list[Signal], b: Behavioral, policy: dict,
+             aged: Signal | None = None) -> dict:
+    """Public evaluate: inner rules + R9 forwarding post-pass on every path."""
+    return _apply_forwarding(_evaluate_inner(signals, b, policy, aged), b)
+
+
+def _apply_forwarding(out: dict, b: Behavioral) -> dict:
+    """R9 post-pass: UNCONDITIONAL call forwarding strips VOICE and CALLBACK
+    channels from any verdict's allowed list (they reach the attacker's
+    redirect). SMS is never touched by CFS alone — voice is the mechanism.
+    Corroboration-only: does not change the decision itself."""
+    if b.call_forwarding_state != "unconditional":
+        return out
+    step = out.get("step_up", {})
+    allowed = [c for c in step.get("allowed", [])
+               if c not in ("VOICE", "VOICE_OTP", "CALLBACK")]
+    prohibited = list(step.get("prohibited", []))
+    for c in ("VOICE", "CALLBACK"):
+        if c not in prohibited:
+            prohibited.append(c)
+    out["step_up"] = {"allowed": allowed, "prohibited": prohibited}
+    out["forwarding_note"] = ("unconditional call forwarding active — voice OTP and "
+                              "callbacks prohibited (reach the redirect target)")
+    if out.get("hold"):
+        # R8 interaction: the cooling-off callback itself must not go to a
+        # forwarded line — the callback gate consumes swap + forwarding state
+        out["hold"]["callback_allowed"] = False
+        out["hold"]["callback_block_reason"] = "unconditional_call_forwarding"
+    return out
 
 
 def _out(decision, band, wr, total, reasons, allowed, prohibited, hold=None):

@@ -81,6 +81,7 @@ class DecisionEngine:
             call_in_progress=req.get("call_in_progress", False),
             call_direction=req.get("call_direction", "none"),
             call_duration_minutes=req.get("call_duration_minutes", 0.0),
+            call_forwarding_state=req.get("call_forwarding_state") or "unknown",
             unknown_payee_age=raw_payee is None or raw_payee < 0,
             unknown_attempts=raw_att is None or raw_att < 0,
             unknown_ratio=not ratio_known,
@@ -90,7 +91,10 @@ class DecisionEngine:
 
         # ---- Tier 0: radar quiet AND no sensitive event AND not sampled -----
         progressive = bool(policy.get("progressive_tiers", True))
-        ev = req.get("recent_sensitive_event", "none")
+        # posture lookup hoisted: push evidence (SWAPPED) outranks radar quiet
+        from app.posture import POSTURE as _posture
+        posture_state = _posture.effective_state(req["msisdn"])
+        ev = req.get("recent_sensitive_event") or "none"   # None-safe for direct dict callers
         ev_age = req.get("sensitive_event_minutes_ago")
         event_recent = (ev != "none"
                         and (ev_age is None
@@ -106,18 +110,36 @@ class DecisionEngine:
                    else "sample" if sampled
                    else "severe" if b.severe
                    else "radar" if b.radar_flagged else "none")
-        if progressive and not b.radar_flagged and not event_recent and not sampled:
-            return self._govern(req, self._finish(req, t0, "APPROVE", "CLEAN", [], 0.0, pol, bundle,
+        posture_swapped = posture_state["state"] == "SWAPPED"
+        if progressive and not b.radar_flagged and not event_recent and not sampled                 and not posture_swapped:
+            out = self._finish(req, t0, "APPROVE", "CLEAN", [], 0.0, pol, bundle,
                                 [], [], total_risk=behavioral_risk_of(b),
                                 tier=0, signals_bought=[], costs=costs, trigger="none",
                                 unknown_fields=unk_fields if unk_fields else None,
-                                basis="BEHAVIORAL_ONLY", thresholds_used=thresholds_used), b, pol)
+                                basis="BEHAVIORAL_ONLY", thresholds_used=thresholds_used)
+            from app.engine.weighting import _apply_forwarding as _fwd
+            return self._govern(req, _fwd(out, b), b, pol)
 
         bought: list[str] = []
 
-        # ---- Phase 1: SIM Swap only (early exit) --------------------------
-        sim = self.nac.sim_swap(req["msisdn"], policy.get("swap_window_hours", 24),
-                                deadline_remaining=deadline - (time.perf_counter() - t0))
+        # ---- Phase 1: SIM Swap — posture cache FIRST, live query only when
+        # the cache cannot substitute (three-state machine; silence never clean)
+        posture_used = False
+        _subst_ok, _subst_gate = _posture.may_substitute(
+            req["msisdn"], amount_vs_mean, req.get("beneficiary_first_seen_minutes", 9999),
+            bool(event_recent))
+        if posture_state["state"] == "SWAPPED":
+            # trusted push event — the swap fact arrives without a query
+            sim = Signal("SIM_SWAP", {"swapped": True}, 1.0, 40.0)
+            posture_used = True
+        elif _subst_ok:
+            sim = Signal("SIM_SWAP", {"swapped": False}, 1.0, 0.0,
+                         degradation=None)
+            sim.__dict__["source"] = "posture_cache"
+            posture_used = True
+        else:
+            sim = self.nac.sim_swap(req["msisdn"], policy.get("swap_window_hours", 24),
+                                    deadline_remaining=deadline - (time.perf_counter() - t0))
         bought.append("SIM_SWAP")
         swapped_recent = bool(sim.value and sim.value.get("swapped"))
         if swapped_recent and amount_vs_mean > mult:
@@ -127,7 +149,10 @@ class DecisionEngine:
                                 tier=1 if not b.severe else 2, signals_bought=bought,
                                 costs=costs, basis="TELECOM_FUSED", trigger=trigger,
                                 unknown_fields=unk_fields if unk_fields else None,
-                                thresholds_used=thresholds_used), b, pol)
+                                thresholds_used=thresholds_used,
+                                forwarding_note=("unconditional call forwarding active — voice OTP and "
+                                                 "callbacks prohibited (reach the redirect target)")
+                                if b.call_forwarding_state == "unconditional" else None), b, pol)
 
         # ---- Tier 1 (mild flag): SIM Swap + free local NV ------------------
         full_sweep = (not progressive) or b.severe or event_full or policy.get("tier_mode") == "full"
@@ -142,7 +167,8 @@ class DecisionEngine:
                                 signals_bought=bought, costs=costs,
                                 basis="TELECOM_FUSED", thresholds_used=thresholds_used,
                                 hold=result.get("hold"), trigger=trigger,
-                                unknown_fields=unk_fields if unk_fields else None), b, pol)
+                                unknown_fields=unk_fields if unk_fields else None,
+                                forwarding_note=result.get("forwarding_note")), b, pol)
 
         # ---- Phase 2 (tier 2): parallel + behavioral + aged window ---------
         from concurrent.futures import ThreadPoolExecutor
@@ -170,12 +196,13 @@ class DecisionEngine:
                             signals_bought=bought, costs=costs,
                             basis="TELECOM_FUSED", thresholds_used=thresholds_used,
                             hold=result.get("hold"), trigger=trigger,
-                            unknown_fields=unk_fields if unk_fields else None), b, pol)
+                            unknown_fields=unk_fields if unk_fields else None,
+                            forwarding_note=result.get("forwarding_note")), b, pol)
 
     def _finish(self, req, t0, decision, band, reasons, wr, policy, bundle,
                 allowed, prohibited, total_risk=None, tier=None, signals_bought=None,
                 costs=None, basis="TELECOM_FUSED", thresholds_used=None, hold=None,
-                trigger=None, unknown_fields=None):
+                trigger=None, unknown_fields=None, forwarding_note=None):
         from app.policy import verify_bundle
         from app.engine.weighting import behavioral_risk as _br
         end_to_end = int((time.perf_counter() - t0) * 1000)
@@ -194,6 +221,7 @@ class DecisionEngine:
             "thresholds_used": thresholds_used,
             **({"hold": hold} if hold is not None else {}),
             **({"data_quality": {"unknown_fields": unknown_fields}} if unknown_fields else {}),
+            **({"forwarding_note": forwarding_note} if forwarding_note else {}),
             "policy_id": bundle.get("policy_id"),
             "policy_version_hash": verify_bundle(bundle)["policy_version_hash"],
             "latency": {"end_to_end_ms": end_to_end,

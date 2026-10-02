@@ -1,0 +1,22 @@
+{
+  "scenario_id": "dilution_attack_v1",
+  "title_en": "Dilution attack (floor holds)",
+  "title_ar": "هجوم التمييع (الأرضية تصمد)",
+  "input": {
+    "msisdn": "+99999991000",
+    "amount": 3000.0,
+    "account_mean": 100.0,
+    "beneficiary_first_seen_minutes": 3,
+    "attempts_last_hour": 0
+  },
+  "expected": {
+    "decision": "DECLINE",
+    "band": "SIM_SWAP_HIGH_RISK",
+    "tier": 2,
+    "weighted_risk_min": 36.0,
+    "sms_prohibited": true,
+    "biometric_allowed": true
+  },
+  "teaches_en": "Three green signals cannot wash one red — the floor keeps 40",
+  "teaches_ar": "ثلاث إشارات خضراء لا تغسل الحمراء — الأرضية تحفظ ٤٠"
+}

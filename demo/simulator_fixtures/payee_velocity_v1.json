@@ -1,0 +1,20 @@
+{
+  "scenario_id": "payee_velocity_v1",
+  "title_en": "Mule-distribution tell (trap fires)",
+  "title_ar": "نمط التوزيع (الفخ ينطلق)",
+  "input": {
+    "msisdn": "+99999991001",
+    "amount": 150.0,
+    "account_mean": 100.0,
+    "beneficiary_first_seen_minutes": 4,
+    "attempts_last_hour": 0,
+    "new_payee_repeats": 2
+  },
+  "expected": {
+    "decision": "ESCALATE",
+    "band": "PAYEE_VELOCITY_TRAP",
+    "sms_prohibited": true
+  },
+  "teaches_en": "Second attempt to a fresh payee — hard rule, no threshold can disable it",
+  "teaches_ar": "المحاولة الثانية لمستفيد جديد — قاعدة صلبة لا يعطلها أي حد"
+}

@@ -1,0 +1,21 @@
+{
+  "scenario_id": "quiet_legitimate_v1",
+  "title_en": "Quiet legitimate transfer",
+  "title_ar": "تحويل عادي سليم",
+  "input": {
+    "amount": 120.0,
+    "account_mean": 100.0,
+    "beneficiary_first_seen_minutes": 9999,
+    "attempts_last_hour": 0,
+    "msisdn": "+99999991001"
+  },
+  "expected": {
+    "decision": "APPROVE",
+    "band": "CLEAN",
+    "tier": 0,
+    "cost_usd": 0.0,
+    "sms_grantable": false
+  },
+  "teaches_en": "Tier 0 — no signal bought, $0, no OTP at all",
+  "teaches_ar": "المستوى ٠ — لا إشارة، صفر تكلفة، لا OTP إطلاقًا"
+}

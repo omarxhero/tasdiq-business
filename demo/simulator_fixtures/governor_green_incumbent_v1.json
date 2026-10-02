@@ -1,0 +1,23 @@
+{
+  "scenario_id": "governor_green_incumbent_v1",
+  "title_en": "Incumbent says risky, telecom clean",
+  "title_ar": "المحرك الحالي يقول خطر والشبكة سليمة",
+  "input": {
+    "msisdn": "+99999991001",
+    "amount": 120.0,
+    "account_mean": 100.0,
+    "beneficiary_first_seen_minutes": 9999,
+    "attempts_last_hour": 0,
+    "mode": "sidecar",
+    "incumbent_score": 55.0,
+    "incumbent_vendor": "feedzai"
+  },
+  "expected": {
+    "decision": "ESCALATE",
+    "band": "GOVERNOR_HELD_ESCALATE",
+    "governor_final": "ESCALATE",
+    "counterfactual": true
+  },
+  "teaches_en": "Never downgrades your engine — and shows what a swap would have changed",
+  "teaches_ar": "لا يُضعف محركك أبدًا — ويعرض ما كان سيغيّره التبديل"
+}

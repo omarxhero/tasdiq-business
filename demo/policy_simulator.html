@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tasdiq · Policy Simulator — محاكي السياسة</title>
+<style>
+:root{--bg:#0B1B33;--panel:#12264A;--line:#1D3A6B;--txt:#F4F7FC;--mut:#9FB0CC;
+--gold:#F2B441;--red:#E25563;--green:#3BC98A;--blue:#3E6FD9}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font:15px/1.55 "Segoe UI",system-ui,sans-serif;padding:24px}
+[dir=rtl] body{font-family:"Segoe UI","Noto Naskh Arabic",Tahoma,sans-serif}
+.wrap{max-width:1080px;margin:0 auto}
+h1{font-size:26px;font-weight:600}h1 .ar{color:var(--gold);font-weight:400;font-size:20px}
+.sub{color:var(--mut);margin:6px 0 20px;font-size:13.5px}
+.lang{float:right;background:var(--panel);border:1px solid var(--line);color:var(--gold);
+padding:4px 14px;border-radius:16px;cursor:pointer;font-size:13px}
+.grid{display:grid;grid-template-columns:260px 1fr;gap:18px}
+@media(max-width:820px){.grid{grid-template-columns:1fr}}
+.presets{display:flex;flex-direction:column;gap:8px}
+.preset{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px;
+cursor:pointer;transition:border-color .15s}
+.preset:hover{border-color:var(--gold)}
+.preset.sel{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)}
+.preset .t{font-weight:600;font-size:13.5px}
+.preset .a{color:var(--mut);font-size:12px;direction:rtl;text-align:right;margin-top:2px}
+.stage{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px}
+.teach{color:var(--gold);font-size:14px;margin-bottom:14px;min-height:20px}
+.teach .a{display:block;direction:rtl;color:var(--mut);font-size:12.5px}
+.verdict{font-size:30px;font-weight:700;letter-spacing:.5px;margin:4px 0 2px}
+.band{color:var(--mut);font-family:Consolas,monospace;font-size:14px}
+.APPROVE{color:var(--green)}.ESCALATE{color:var(--gold)}.DECLINE{color:var(--red)}
+.meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:16px 0}
+.cell{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+.cell .k{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.6px}
+.cell .v{font-size:16px;font-weight:600;margin-top:2px}
+.channels{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.ch{padding:6px 14px;border-radius:6px;font-size:13px;font-weight:600;border:1px solid}
+.ch.ok{color:var(--green);border-color:var(--green);cursor:pointer}
+.ch.no{color:var(--red);border-color:var(--red);text-decoration:line-through}
+.btn{background:var(--blue);color:#fff;border:none;border-radius:6px;padding:9px 18px;
+font-size:14px;font-weight:600;cursor:pointer;margin:6px 10px 6px 0}
+.btn:disabled{opacity:.4;cursor:default}
+.ev{margin-top:14px}
+.ev summary{cursor:pointer;color:var(--gold);font-size:13.5px}
+pre{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:12px;
+font-size:11.5px;overflow:auto;max-height:340px;margin-top:8px;color:var(--mut)}
+.dispatch{margin-top:10px;font-size:14px;min-height:22px}
+.dispatch .ref{color:var(--red);font-weight:700}
+.dispatch .ok{color:var(--green)}
+.foot{color:var(--mut);font-size:11.5px;margin-top:18px;border-top:1px solid var(--line);padding-top:10px}
+.costbar{height:8px;border-radius:4px;background:var(--bg);border:1px solid var(--line);margin-top:6px;overflow:hidden}
+.costfill{height:100%;background:linear-gradient(90deg,var(--green),var(--gold),var(--red));width:0;transition:width .4s}
+</style>
+</head>
+<body>
+<div class="wrap">
+<button class="lang" id="lang" onclick="toggleLang()">العربية</button>
+<h1>Tasdiq · Policy Simulator <span class="ar">تصديق — محاكي السياسة</span></h1>
+<p class="sub" id="sub">Every preset runs the REAL deterministic engine on sandbox numbers. The verdict, the cost, and the channel grants are live — not scripted. Demo tenant; thresholds are never shown.</p>
+
+<div class="grid">
+<div class="presets" id="presets"></div>
+<div class="stage">
+  <div class="teach" id="teach"></div>
+  <div class="verdict" id="verdict">—</div>
+  <div class="band" id="band"></div>
+  <div class="meta">
+    <div class="cell"><div class="k" id="l_tier">Tier · مستوى</div><div class="v" id="tier">—</div></div>
+    <div class="cell"><div class="k" id="l_cost">Signal cost · تكلفة</div><div class="v" id="cost">—</div>
+      <div class="costbar"><div class="costfill" id="costfill"></div></div></div>
+    <div class="cell"><div class="k" id="l_trig">Why signals bought · سبب الشراء</div><div class="v" id="trig" style="font-size:12.5px">—</div></div>
+    <div class="cell"><div class="k" id="l_sig">Signals · إشارات</div><div class="v" id="sigs" style="font-size:12.5px">—</div></div>
+  </div>
+  <div class="channels" id="channels"></div>
+  <button class="btn" id="runBtn" onclick="runSelected()" disabled>Run decision</button>
+  <div class="dispatch" id="dispatch"></div>
+  <details class="ev"><summary id="evLabel">Evidence — the bytes your SIEM would receive</summary>
+    <pre id="evidence">—</pre></details>
+  <div class="foot" id="foot">Deterministic engine · Z3 invariants I1–I6 proved · Ed25519-signed verdicts &amp; grants · demo/simulator_fixtures contract-tested in CI. Sandbox numbers only (+999&nbsp;999&nbsp;910&nbsp;00 / 01).</div>
+</div>
+</div>
+</div>
+<script>
+let FIXTURES=[], sel=null, lang='en', lastVerdict=null;
+const $=id=>document.getElementById(id);
+const L={
+ en:{run:'Run decision',refuse:'REFUSED',reason:'reason',allowed:'Allowed channels',none:'no step-up needed (OTP-free path)',evid:'Evidence — the bytes your SIEM would receive',trySms:'click an ALLOWED channel to attempt dispatch'},
+ ar:{run:'نفّذ القرار',refuse:'مرفوض',reason:'السبب',allowed:'القنوات المسموحة',none:'لا حاجة لتحقق إضافي (مسار بلا OTP)',evid:'الدليل — البايتات التي يتلقاها نظامك',trySms:'اضغط قناة مسموحة لمحاولة الإرسال'}};
+
+async function load(){
+  const r=await fetch('/v1/simulator/fixtures'); const j=await r.json(); FIXTURES=j.fixtures;
+  const box=$('presets'); box.innerHTML='';
+  FIXTURES.forEach(f=>{const d=document.createElement('div');d.className='preset';d.id=f.scenario_id;
+    d.innerHTML=`<div class="t">${f.title_en}</div><div class="a">${f.title_ar}</div>`;
+    d.onclick=()=>select(f);box.appendChild(d);});
+  select(FIXTURES[0]);
+}
+function select(f){sel=f;document.querySelectorAll('.preset').forEach(p=>p.classList.remove('sel'));
+  $(f.scenario_id).classList.add('sel');
+  $('teach').innerHTML=(lang==='ar'?f.teaches_ar:f.teaches_en)+`<span class="a">${lang==='ar'?f.teaches_en:f.teaches_ar}</span>`;
+  $('runBtn').disabled=false;$('runBtn').textContent=L[lang].run;
+  $('dispatch').textContent='';$('verdict').textContent='—';$('verdict').className='verdict';
+  $('band').textContent='';$('tier').textContent='—';$('cost').textContent='—';$('trig').textContent='—';
+  $('sigs').textContent='—';$('channels').innerHTML='';$('evidence').textContent='—';$('costfill').style.width='0';}
+async function runSelected(){
+  if(!sel)return; $('runBtn').disabled=true;
+  const body=Object.assign({txn_id:'sim-'+Date.now()},sel.input);
+  const r=await fetch('/v1/decide',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+  const v=await r.json(); lastVerdict=v; render(v);
+  $('runBtn').disabled=false;}
+function render(v){
+  $('verdict').textContent=v.decision; $('verdict').className='verdict '+v.decision;
+  $('band').textContent=v.band;
+  $('tier').textContent=v.cost.tier;
+  $('cost').textContent='$'+v.cost.cost_estimate_usd.toFixed(2);
+  $('costfill').style.width=Math.min(100,(v.cost.cost_estimate_usd/0.28)*100)+'%';
+  $('trig').textContent=v.cost.trigger;
+  $('sigs').textContent=v.cost.signals_bought.length?v.cost.signals_bought.join(' · '):'—';
+  const ch=$('channels'); ch.innerHTML='';
+  const allowed=v.step_up.allowed, prohibited=v.step_up.prohibited;
+  if(!allowed.length){ch.innerHTML=`<span style="color:var(--mut)">${L[lang].none}</span>`;}
+  allowed.forEach(c=>{const b=document.createElement('button');b.className='ch ok';b.textContent=c;
+    b.onclick=()=>tryDispatch(c);ch.appendChild(b);});
+  prohibited.forEach(c=>{const s=document.createElement('span');s.className='ch no';s.textContent=c;ch.appendChild(s);});
+  $('dispatch').textContent=L[lang].trySms;
+  $('dispatch').dataset.token=v.step_up_grant.token;
+  const ev={schema:'tasdiq.verdict.demo.v1',txn_id:v.txn_id,decision:v.decision,band:v.band,
+    policy_version_hash:v.policy_version_hash,thresholds_used:v.thresholds_used,
+    step_up:v.step_up,cost:v.cost,verdict_signature:v.verdict_signature.content_hash,
+    grant:{allowed:v.step_up_grant.grant.allowed,prohibited:v.step_up_grant.grant.prohibited,
+           expires_in_s:v.step_up_grant.grant.exp-v.step_up_grant.grant.iat}};
+  if(v.data_quality)ev.data_quality=v.data_quality;
+  if(v.hold)ev.hold=v.hold;
+  if(v.governor)ev.governor={final:v.governor.final,counterfactual:v.governor.counterfactual.verdict};
+  $('evidence').textContent=JSON.stringify(ev,null,2);}
+async function tryDispatch(channel){
+  const tok=$('dispatch').dataset.token; if(!tok)return;
+  const r=await fetch('/v1/stepup/dispatch',{method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({token:tok,channel:channel,mode:'enforce'})});
+  const j=await r.json();
+  $('dispatch').innerHTML=j.dispatched
+    ?`<span class="ok">✓ ${channel} dispatched</span>`
+    :`<span class="ref">✗ ${channel} ${L[lang].refuse}</span> <span style="color:var(--mut)">(${L[lang].reason}: ${j.audit.reason})</span>`;}
+function toggleLang(){lang=lang==='en'?'ar':'en';$('lang').textContent=lang==='en'?'العربية':'English';
+ $('evLabel').textContent=L[lang].evid; if(sel)select(sel); if(lastVerdict)render(lastVerdict);}
+load();
+</script>
+</body>
+</html>

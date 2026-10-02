@@ -1,0 +1,23 @@
+{
+  "scenario_id": "patient_attacker_v1",
+  "title_en": "Patient attacker (Tier-0 bypass attempt)",
+  "title_ar": "مهاجم صبور (محاولة تجاوز)",
+  "input": {
+    "msisdn": "+99999991000",
+    "amount": 1500.0,
+    "account_mean": 100.0,
+    "beneficiary_first_seen_minutes": 120,
+    "attempts_last_hour": 0,
+    "recent_sensitive_event": "credential_reset",
+    "sensitive_event_minutes_ago": 15
+  },
+  "expected": {
+    "decision": "ESCALATE",
+    "band": "SIM_SWAP_RECENT",
+    "tier": 2,
+    "cost_usd": 0.21,
+    "sms_prohibited": true
+  },
+  "teaches_en": "Waits out the radar — but a credential reset forces the SIM check (I6)",
+  "teaches_ar": "ينتظر خارج الرادار — لكن إعادة تعيين كلمة المرور تفرض فحص الشريحة"
+}

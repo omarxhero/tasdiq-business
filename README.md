@@ -8,10 +8,10 @@
 
 *During a SIM swap, an SMS OTP is a delivery service for the attacker. Tasdiq makes that OTP impossible to send.*
 
-[Tests 117/117](#evidence--receipts) · [Proofs I1–I6](#mathematically-proved-safety) · [Quickstart](#quickstart) · [Architecture](docs/ARCHITECTURE.md) · [White Paper](business/WHITE_PAPER.md)
+[Tests 166/168](#evidence--receipts) · [Proofs I1–I8](#mathematically-proved-safety) · [Policy Simulator](#policy-simulator) · [Quickstart](#quickstart) · [Architecture](docs/ARCHITECTURE.md) · [White Paper](business/WHITE_PAPER.md)
 
-<img src="https://img.shields.io/badge/tests-117%2F117-brightgreen" alt="tests"/>
-<img src="https://img.shields.io/badge/Z3%20proofs-I1%E2%80%93I6%20PROVED-blue" alt="proofs"/>
+<img src="https://img.shields.io/badge/tests-166%2F168-brightgreen" alt="tests"/>
+<img src="https://img.shields.io/badge/Z3%20proofs-I1%E2%80%93I8%20PROVED-blue" alt="proofs"/>
 <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="python"/>
 <img src="https://img.shields.io/badge/license-MIT-green" alt="license"/>
 <img src="https://img.shields.io/badge/decision%20budget-450ms-orange" alt="budget"/>
@@ -60,6 +60,7 @@ flowchart LR
 | 2 | **Device re-registration** | number moved to a new device | Device Swap corroboration + aged-window rule (R6) |
 | 3 | **Snatch & run** | phone stolen unlocked; telecom all green | behavioral radar: spike + new payee ⇒ biometric-only (R5) |
 | 4 | **Coached payment** | victim ON THE CALL with the scammer, reading out every OTP | `COOLING_OFF_HOLD` — **nothing completes while the call is live** (R8) |
+| 5 | **Forwarded line** | unconditional call forwarding redirects voice OTP and the bank's own fraud callback to the attacker | VOICE + CALLBACK stripped from every verdict (R9) — SMS never banned by forwarding alone |
 
 ## Mathematically proved safety
 
@@ -75,11 +76,13 @@ invariants before it ships:
 | **I4** | raising the amount **never** un-blocks a blocked payment |
 | **I5** | a live call during payment **never** yields APPROVE |
 | **I6** | a sensitive event (credential reset, device registration…) **never** rides Tier 0 — signals are always bought |
+| **I7** | unconditional call forwarding **never** softens a verdict (voice is the mechanism; SMS untouched by CFS alone) |
+| **I8** | a swap fact from **any source** — live query or posture-cache push event — **never** yields APPROVE |
 
 ```bash
-python scripts/prove_policies.py
-# === bank-a-v1 ===  [PROVED] I1..I6   === bank-b-v1 ===  [PROVED] I1..I6
-# ALL POLICIES PROVE ALL INVARIANTS
+python scripts/verify.py        # or: make verify — the one-command gate
+# suite -> Z3 proofs I1-I8 -> CURRENT_BUILD_STATE.md regenerated
+# ALL GREEN
 ```
 
 A 60-sample randomized **differential check** runs the Z3 model and the real
@@ -210,7 +213,11 @@ Sandbox test numbers: `+99999991000` = swapped (fraud) · `+99999991001` = clean
 | `GET /v1/replay/{txn_id}` | decision records + chain proof |
 | `GET /v1/stepup/audit` | gateway refusal audit |
 | `GET /v1/metrics` | engine counters |
-| `python scripts/prove_policies.py` | Z3 proof certificate |
+| `python scripts/verify.py` | one-command gate: tests + proofs + build state |
+| `POST /v1/events` | CAMARA event ingress (posture cache) |
+| `POST /v1/outcomes` | disposition labels -> measured lift |
+| `POST /v1/webhooks` + `/dispatch` `/outbox` `/replay` | signed evidence push |
+| `GET /v1/simulator/fixtures` | Policy Simulator presets (contract-tested) |
 | `python scripts/replay_lab.py log.json` | Replay Lab CLI |
 
 ## Repo layout

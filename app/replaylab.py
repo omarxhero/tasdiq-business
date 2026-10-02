@@ -118,6 +118,8 @@ def replay(records: list[dict], bundle: dict, title: str = "Replay Lab report") 
         tiers[tier] = tiers.get(tier, 0) + 1
 
         row = {"txn_id": r["txn_id"], "decision": dec, "band": band, "tier": tier}
+        if verdict.get("governor"):
+            row["governor_tasdiq_rail"] = verdict["governor"]["tasdiq_rail"]
         if verdict.get("data_quality"):
             row["data_quality"] = verdict["data_quality"]
         fraud = rec.get("confirmed_fraud")
@@ -147,6 +149,12 @@ def replay(records: list[dict], bundle: dict, title: str = "Replay Lab report") 
         out_rows.append(row)
 
     labeled = sum(1 for r in records if r.get("confirmed_fraud") is not None)
+    # Outcome join: measured lift on REAL dispositions when provided
+    lift_block = None
+    if records and any(r.get("_outcome") for r in records):
+        from app.outcomes import measured_lift
+        outs = [r["_outcome"] for r in records if r.get("_outcome")]
+        lift_block = measured_lift(outs, out_rows)
     report = {
         "title": title,
         "generated_at": int(time.time()),
@@ -165,6 +173,7 @@ def replay(records: list[dict], bundle: dict, title: str = "Replay Lab report") 
         "exposure": {"count": len(exposure), "rows": exposure,
                      "definition": "tier-0 quiet approvals whose verdict would change under a hypothetical live SIM swap"},
         "incumbent": incumbent_matrix,
+        **({"measured_lift": lift_block} if lift_block else {}),
         "rows": out_rows,
     }
     # policy hash + single artifact signature (maker persona by design)

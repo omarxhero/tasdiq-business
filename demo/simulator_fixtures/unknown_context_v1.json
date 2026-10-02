@@ -1,0 +1,22 @@
+{
+  "scenario_id": "unknown_context_v1",
+  "title_en": "Missing context (screened, never clean)",
+  "title_ar": "سياق ناقص (فحص، لا افتراض سلامة)",
+  "input": {
+    "msisdn": "+99999991001",
+    "amount": 1500.0,
+    "beneficiary_first_seen_minutes": 120
+  },
+  "expected": {
+    "decision": "APPROVE",
+    "band": "CLEAN",
+    "tier": 1,
+    "trigger_prefix": "unknown:",
+    "unknown_fields": [
+      "attempts",
+      "account_mean"
+    ]
+  },
+  "teaches_en": "Omitted fields are UNKNOWN — screened with evidence, never assumed clean",
+  "teaches_ar": "الحقول الغائبة مجهولة — فحص بدليل، لا افتراض سلامة"
+}
